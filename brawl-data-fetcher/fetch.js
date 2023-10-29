@@ -1,9 +1,10 @@
+require('dotenv').config();
 const axios = require('axios');
 const cron = require('node-cron');
 const { MongoClient } = require('mongodb');
 
-const API_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiIsImtpZCI6IjI4YTMxOGY3LTAwMDAtYTFlYi03ZmExLTJjNzQzM2M2Y2NhNSJ9.eyJpc3MiOiJzdXBlcmNlbGwiLCJhdWQiOiJzdXBlcmNlbGw6Z2FtZWFwaSIsImp0aSI6ImMzZjhiMmZhLWQwNzEtNDhlZi05NjFkLWJjZTNiOTczM2JlNSIsImlhdCI6MTY5ODM5NzYwMCwic3ViIjoiZGV2ZWxvcGVyLzdkYjk2ZTRkLWNjYWQtMDA2MS1hODY0LTNjNmRkMDQ5NWFhZSIsInNjb3BlcyI6WyJicmF3bHN0YXJzIl0sImxpbWl0cyI6W3sidGllciI6ImRldmVsb3Blci9zaWx2ZXIiLCJ0eXBlIjoidGhyb3R0bGluZyJ9LHsiY2lkcnMiOlsiMy4xMy44NC42OCJdLCJ0eXBlIjoiY2xpZW50In1dfQ.XVxuWaoV9HvPAP062r6toQoCy7PD8lswz2zgBnIF643BkQUT0kZ3ZpiAGn9kUBDl9dOYMiwDLXxtV_-kk5LXlw';
-const MONGO_URI = 'mongodb+srv://varwhiz:varAws1m63@brawlcluster.oci3nfn.mongodb.net/?retryWrites=true&w=majority';
+const API_KEY = process.env.API_KEY;
+const MONGO_URI = process.env.MONGO_URI;
 
 const BRAWL_STARS_API_ENDPOINT = 'https://api.brawlstars.com/v1';
 
