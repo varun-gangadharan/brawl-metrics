@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "aws-xray-sdk": "^3.5.3",
+    "axios": "^1.6.0"
+  }
+}
