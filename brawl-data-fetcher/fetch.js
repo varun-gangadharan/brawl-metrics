@@ -2,6 +2,22 @@ require('dotenv').config();
 const axios = require('axios');
 const cron = require('node-cron');
 const { MongoClient } = require('mongodb');
+const moment = require('moment-timezone');
+
+
+const fs = require('fs');
+const logFile = 'application.log';
+
+function logMessage(message) {
+    const timestamp = new Date().toISOString();
+    const logEntry = `[${timestamp}] ${message}\n`;
+
+    // Log to console
+    console.log(logEntry);
+
+    // Append to a log file
+    fs.appendFileSync(logFile, logEntry);
+}
 
 const API_KEY = process.env.API_KEY;
 const MONGO_URI = process.env.MONGO_URI;
@@ -16,6 +32,33 @@ async function connectToDatabase(uri) {
     } catch (err) {
         console.error('Database connection error:', err);
         process.exit(1); // Exit script with a failure code
+    }
+}
+
+function parseBattleTime(battleTime) {
+    logMessage(`parseBattleTime called with battleTime: ${battleTime}`);
+    
+    if (!battleTime) {
+        console.error('Invalid battleTime:', battleTime);
+        return null;  // Returning null to handle this scenario upstream
+    }
+
+    try {
+        // Assuming the date format from the API is like '20231030T123456.000Z' (ISO 8601 format)
+        const format = 'YYYYMMDDTHHmmss.SSS[Z]'; // Adjusted format 
+
+        // Parsing the date in the specified format
+        const parsedDate = moment(battleTime, format);
+
+        if (!parsedDate.isValid()) {
+            throw new Error(`Invalid date format for ${battleTime}`);
+        }
+        console.log("Parsed Date:", parsedDate.toISOString());
+        // Converting to a specific timezone (e.g., 'America/Chicago')
+        return parsedDate.tz('America/Chicago').format();
+    } catch (error) {
+        console.error('Error parsing battleTime:', battleTime, 'Error:', error);
+        return null;
     }
 }
 
@@ -46,10 +89,21 @@ function getPlayerTrophies(battle, playerTag) {
 }
 
 async function processBattleLogs(battleLogResponse, playerTag, db) {
+    logMessage(`processBattleLogs called for playerTag: ${playerTag}`);
+
+    // Check if there are battles to process
+    if (battleLogResponse.items && battleLogResponse.items.length > 0) {
+        logMessage(`Found ${battleLogResponse.items.length} battles for processing.`);
+    } else {
+        logMessage(`No new battles found for playerTag: ${playerTag}.`);
+        return;  // No battles to process
+    }
+
     for (const battle of battleLogResponse.items) {
         
 
         const playerTrophies = getPlayerTrophies(battle, playerTag);
+        const cstBattleTime = parseBattleTime(battle.battleTime);
 
         // Extract required battle info
         let battleData;
@@ -58,7 +112,7 @@ async function processBattleLogs(battleLogResponse, playerTag, db) {
             battleData = {
                 battleId: battle.event.id,  // Assuming a unique ID is present
                 playerTag: playerTag,
-                time: new Date(battle.battleTime),
+                time: new Date(parseBattleTime(battle.battleTime)),
                 event: battle.event,
                 mode: battle.battle.mode,
                 map: battle.event.map,
@@ -71,7 +125,7 @@ async function processBattleLogs(battleLogResponse, playerTag, db) {
             battleData = {
                 battleId: battle.event.id,  // Assuming a unique ID is present
                 playerTag: playerTag,
-                time: new Date(battle.battleTime),
+                time: new Date(parseBattleTime(battle.battleTime)),
                 event: battle.event,
                 mode: battle.battle.mode,
                 map: battle.event.map,
@@ -83,16 +137,30 @@ async function processBattleLogs(battleLogResponse, playerTag, db) {
                 playerTrophies: playerTrophies
             };
         }
+        
 
-        const compositeId = `${playerTag}-${battle.event.id}-${battle.battleTime.replace(/[^0-9]/g, '')}`;
+        // Using cstBattleTime for creating the compositeId and storing in battleData
+        const compositeId = `${playerTag}-${battle.event.id}-${cstBattleTime.replace(/[^0-9]/g, '')}`;
         battleData.compositeId = compositeId;
+        battleData.time = new Date(cstBattleTime); 
 
+        logMessage(`Attempting to update DB with compositeId: ${compositeId} for playerTag: ${playerTag}`);
+
+
+        // Logging battle data to a file
+        logMessage(`Adding/Updating battle: PlayerTag: ${playerTag}, BattleId: ${battleData.battleId}, Trophies: ${battleData.trophyChange}`);
+        
         // Update battle info in DB using compositeId
-        await db.collection('battles').updateOne(
-            { compositeId: compositeId },
-            { $set: battleData },
-            { upsert: true }
-        );
+        try {
+            await db.collection('battles').updateOne(
+                { compositeId: compositeId },
+                { $set: battleData },
+                { upsert: true }
+            );
+            logMessage(`DB update successful for battleId: ${battleData.battleId}, playerTag: ${playerTag}`);
+        } catch (dbError) {
+            logMessage(`Error updating battle in DB: ${dbError.message}`);
+        }
 
         // Update achievements and player stats
         const incrementFields = { totalBattles: 1 };
@@ -131,6 +199,13 @@ async function processBattleLogs(battleLogResponse, playerTag, db) {
     }
 }
 
+function checkLogSizeAndRotate() {
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (fs.existsSync(logFile) && fs.statSync(logFile).size > maxSize) {
+        fs.renameSync(logFile, logFile + '.1'); // simple rotation, consider timestamp or incrementing numbers
+    }
+}
+
 async function updateLeaderboards(db) {
     const leaderboard = await db.collection('playerStats')
                                 .find({})
@@ -143,7 +218,14 @@ async function updateLeaderboards(db) {
 
 async function checkAndUpdateMilestones(playerTag, db) {
     const milestones = [100, 500, 1000, 5000]; // Define your milestones
-    const playerStats = await db.collection('playerStats').findOne({ playerTag: playerTag });
+    let playerStats = await db.collection('playerStats').findOne({ playerTag: playerTag });
+    
+    // Ensure playerStats and playerStats.milestones are initialized
+    if (!playerStats) {
+        playerStats = { trophies: 0, milestones: [] };
+    } else if (!Array.isArray(playerStats.milestones)) {
+        playerStats.milestones = [];  // Initialize milestones as an array if not set
+    }
     
     milestones.forEach(async (milestone) => {
         if (playerStats.trophies >= milestone && !playerStats.milestones.includes(milestone)) {
@@ -157,6 +239,7 @@ async function checkAndUpdateMilestones(playerTag, db) {
     });
 }
 
+
 async function calculateMVP(db, timeframe = 'weekly') {
     let groupByFormat = '%Y-%m-%d';
     if (timeframe === 'monthly') groupByFormat = '%Y-%m';
@@ -168,8 +251,7 @@ async function calculateMVP(db, timeframe = 'weekly') {
     const pipeline = [
         { $match: { time: { $gte: pastDate, $lte: today } } },
         { $group: { 
-            _id: { $dateToString: { format: groupByFormat, date: "$time" } },
-            playerTag: "$playerTag",
+            _id: "$playerTag",
             totalTrophies: { $sum: "$trophyChange" }
           } 
         },
@@ -216,13 +298,25 @@ async function fetchData(db) {
             // Fetch player and their battlelog concurrently
             const playerInfoPromise = axios.get(`${BRAWL_STARS_API_ENDPOINT}/players/${encodeURIComponent(tag)}`, {
                 headers: { Authorization: `Bearer ${API_KEY}` }
+            }).catch(error => {
+                logMessage(`Error fetching player info for tag ${tag}: ${error.message}`);
             });
 
             const battleLogPromise = axios.get(`${BRAWL_STARS_API_ENDPOINT}/players/${encodeURIComponent(tag)}/battlelog`, {
                 headers: { Authorization: `Bearer ${API_KEY}` }
+            }).catch(error => {
+                logMessage(`Error fetching battle log for tag ${tag}: ${error.message}`);
             });
-
             const [playerResponse, battleLogResponse] = await Promise.all([playerInfoPromise, battleLogPromise]);
+
+            if (!playerResponse || !battleLogResponse) {
+                logMessage(`Skipping processing due to error in fetching data for player tag ${tag}.`);
+            }
+            
+            
+
+            //LOGGING TO SEE BATTLELOG API RESPONSE
+            console.log(`Battle log for ${tag}:`, JSON.stringify(battleLogResponse.data, null, 2));
 
             // Update player data
             const playerData = {
@@ -231,12 +325,55 @@ async function fetchData(db) {
             };
             await db.collection('players').updateOne({ tag }, { $set: playerData }, { upsert: true });
 
+            // Validate that battleLogResponse is not empty or malformed
+            if (!battleLogResponse || !battleLogResponse.data) {
+                logMessage(`Invalid or empty battle log response for tag ${tag}.`);
+                return;
+            }
+
             // Filter new battles and process
             const lastBattleTime = await db.collection('achievements').findOne({ playerTag: tag }, { projection: { lastBattleTime: 1 } });
-            const newBattles = battleLogResponse.data.items.filter(battle => new Date(battle.battleTime) > new Date(lastBattleTime?.lastBattleTime || 0));
+            logMessage(`Last Battle Time for ${tag}: ${lastBattleTime?.lastBattleTime || "No previous battles logged"}`);
+            
+            // Log the battle times from the API response
+            if (battleLogResponse && battleLogResponse.data && battleLogResponse.data.items) {
+                battleLogResponse.data.items.forEach((item, index) => {
+                    logMessage(`API Battle Time for ${tag} - Battle ${index + 1}: ${item.battleTime}`);
+                });
+            } else {
+                logMessage(`Battle log response for ${tag} is empty or invalid.`);
+            }
+            
+            const newBattles = battleLogResponse.data.items.filter(battle => {
+                const format = "YYYYMMDDTHHmmss.SSSZ";
+                const parsedAPIDate = moment(battle.battleTime, format);
+                if (!parsedAPIDate.isValid()) {
+                    logMessage(`Invalid date encountered in API response for battle time: ${battle.battleTime}`);
+                    return false; // skip this iteration
+                }
+
+                const parsedLastBattleDate = lastBattleTime?.lastBattleTime ? new Date(lastBattleTime.lastBattleTime) : new Date(0);
+                if (isNaN(parsedLastBattleDate)) {
+                    logMessage(`Invalid last battle date from database for tag ${tag}`);
+                    return false; // consider appropriate action here
+                }
+                
+                logMessage(`Parsed API Date for ${tag} - ${battle.battleTime}: ${parsedAPIDate.toISOString()}`);
+                logMessage(`Parsed Last Battle Date for ${tag}: ${parsedLastBattleDate.toISOString()}`);
+                
+                const isBattleNew = parsedAPIDate > parsedLastBattleDate;
+                logMessage(`Is Battle New for ${tag}? ${isBattleNew}`);
+                
+                return isBattleNew;
+            });
+            
             
             if (newBattles.length > 0) {
+                logMessage(`New battles for ${tag}: ${newBattles.length}`);
+                console.log(`New Battles for ${tag}:`, JSON.stringify(newBattles, null, 2)); // Detailed view of new battles
                 await processBattleLogs({ items: newBattles }, tag, db);
+            } else{
+                logMessage(`No new battles for ${tag}`);
             }
 
             // After updating battles, check for updates in leaderboards and milestones
@@ -264,6 +401,7 @@ async function main() {
     await initializeDatabase(db);
     fetchData(db);
     cron.schedule('0 * * * *', () => fetchData(db));
+    checkLogSizeAndRotate();
 }
 
 main();

@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "dotenv": "^16.3.1",
+    "moment-timezone": "^0.5.43",
     "mongodb": "^6.2.0"
   }
 }
