@@ -35,6 +35,8 @@ async function connectToDatabase(uri) {
     }
 }
 
+
+
 function parseBattleTime(battleTime) {
     logMessage(`parseBattleTime called with battleTime: ${battleTime}`);
     
@@ -100,11 +102,50 @@ async function processBattleLogs(battleLogResponse, playerTag, db) {
     }
 
     for (const battle of battleLogResponse.items) {
-        
-
         const playerTrophies = getPlayerTrophies(battle, playerTag);
         const cstBattleTime = parseBattleTime(battle.battleTime);
 
+        // Find the player's brawler ID in the nested teams structure
+        let brawlerId;
+        if (battle.battle.teams) {
+            for (const team of battle.battle.teams) {
+                for (const player of team) {
+                    if (player.tag === playerTag) {
+                        brawlerId = player.brawler.id;
+                        break;
+                    }
+                }
+                if (brawlerId) break;
+            }
+        } else if (battle.battle.players) {
+            for (const player of battle.battle.players) {
+                if (player.tag === playerTag) {
+                    brawlerId = player.brawler.id;
+                    break;
+                }
+            }
+        }
+        const mapName = battle.event.map;
+        const modeName = battle.battle.mode;
+        const isWin = battle.battle.result === 'victory';
+        console.log('bruh')
+        console.log(`Brawler ID: ${playerTag} map name: ${mapName} mode name: ${modeName}`);
+
+        const winLossUpdate = isWin ? { $inc: { wins: 1 } } : { $inc: { losses: 1 } };
+
+        // Continue processing only if brawlerId is found
+        if (!brawlerId) {
+            logMessage(`Brawler ID not found for playerTag: ${playerTag} in battle.`);
+            continue;
+        }
+        
+        if (brawlerId && mapName && modeName) {
+            await db.collection('brawlerStats').updateOne(
+                { brawlerId, mapName, modeName },
+                winLossUpdate,
+                { upsert: true }
+            );
+        }
         // Extract required battle info
         let battleData;
         if (["soloShowdown", "duoShowdown"].includes(battle.battle.mode)) {
@@ -166,13 +207,26 @@ async function processBattleLogs(battleLogResponse, playerTag, db) {
         const incrementFields = { totalBattles: 1 };
         if (battleData.outcome === 'victory') {
             incrementFields['totalVictories'] = 1;
-            incrementFields['winStreak'] = 1; // Reset or handled elsewhere if a loss is recorded
+            incrementFields['winStreak'] = 1;
+            incrementFields['lossStreak'] = 0; // Reset lossStreak on victory
         } else {
-            incrementFields['lossStreak'] = 1; // Reset or handled elsewhere if a victory is recorded
+            incrementFields['lossStreak'] = 1; // Increment lossStreak on defeat
+            // Need to handle resetting the winStreak on a defeat.
+            incrementFields['winStreak'] = 0; // Reset winStreak on defeat
         }
 
+        let incrementPlayerStats = {
+            'battlesPlayed': 1,
+            'lossStreak': battleData.outcome === 'defeat' ? 1 : -1
+        };
+
         // Updating trophies and calculating stats
-        incrementFields['totalTrophiesWon'] = battleData.trophyChange;
+        // Ensure trophyChange is a number and has a value before incrementing
+        if (typeof battleData.trophyChange === 'number') {
+            incrementPlayerStats['totalTrophiesWon'] = battleData.trophyChange;
+        } else {
+            logMessage(`Warning: Invalid trophyChange for battleId: ${battleData.battleId}, playerTag: ${playerTag}`);
+        }
 
         // Update the achievements and playerStats collection
         await db.collection('achievements').updateOne(
@@ -185,11 +239,16 @@ async function processBattleLogs(battleLogResponse, playerTag, db) {
             { playerTag: playerTag },
             { 
                 $inc: {
+                    incrementPlayerStats,
                     'battlesPlayed': 1,
-                    'trophies': battleData.trophyChange
+                    'trophies': battleData.trophyChange,
+                    // Assuming lossStreak is part of playerStats
+                    'lossStreak': battleData.outcome === 'defeat' ? 1 : -1
                 },
                 $set: { lastActive: battleData.time },
-                $max: { 'highestTrophies': playerTrophies }
+                $max: { 'highestTrophies': playerTrophies },
+                // Ensure to reset the streak correctly
+                $setOnInsert: { 'lossStreak': battleData.outcome === 'defeat' ? 1 : 0 }
             },
             { upsert: true }
         );
@@ -197,6 +256,17 @@ async function processBattleLogs(battleLogResponse, playerTag, db) {
         // Historical data updates for trend analysis
         await db.collection('battleHistory').insertOne({ ...battleData, timeStamp: new Date() });
     }
+}
+
+async function calculateWinRates(db) {
+    const brawlers = await db.collection('brawlerStats').find({}).toArray();
+    
+    brawlers.forEach(brawler => {
+        if (brawler.wins + brawler.losses > 0) {
+            const winRate = brawler.wins / (brawler.wins + brawler.losses);
+            console.log(`Brawler ${brawler.brawlerId} on ${brawler.mapName} (${brawler.modeName}) - Win Rate: ${winRate.toFixed(2)}`);
+        }
+    });
 }
 
 function checkLogSizeAndRotate() {
@@ -263,6 +333,35 @@ async function calculateMVP(db, timeframe = 'weekly') {
     console.log(`MVP ${timeframe}:`, results);
 }
 
+async function calculateMostImprovedPlayer(db, timeframe = 30) {
+    // Adjust the timeframe according to your snapshot interval
+
+    const previousSnapshotDate = new Date();
+    previousSnapshotDate.setDate(previousSnapshotDate.getDate() - timeframe);
+
+    const pipeline = [
+        {
+            $match: {
+                lastActive: { $gte: previousSnapshotDate }
+            }
+        },
+        {
+            $project: {
+                playerTag: 1,
+                trophyIncrease: { $subtract: ["$highestTrophies", "$baselineTrophies"] }
+            }
+        },
+        { $sort: { trophyIncrease: -1 } },
+        { $limit: 1 }
+    ];
+
+    const result = await db.collection('playerStats').aggregate(pipeline).toArray();
+    if (result.length > 0) {
+        console.log(`Most Improved Player:`, result[0]);
+    } else {
+        console.log("No player improvement data available for the specified timeframe.");
+    }
+}
 
 
 async function calculatePlayerTrend(playerTag, db) {
@@ -275,8 +374,25 @@ async function calculatePlayerTrend(playerTag, db) {
     ];
 
     const results = await db.collection('battles').aggregate(pipeline).toArray();
-    console.log(`Average trophies won per battle for player ${playerTag} in the last 30 days:`, results);
+
+    if (results.length > 0) {
+        const trendData = {
+            date: new Date(),  // Capture the date when this analysis was run
+            avgTrophies: results[0].avgTrophies
+        };
+
+        // Update the playerTrends collection
+        await db.collection('playerTrends').updateOne(
+            { playerTag: playerTag },
+            { $push: { trends: trendData } },
+            { upsert: true }
+        );
+
+        console.log(`Average trophies won per battle for player ${playerTag} in the last 30 days:`, results);
+    }
 }
+
+
 
 async function flagExceptionalPerformances(db) {
     const threshold = 30; // Define your own threshold for exceptional performance
@@ -316,7 +432,7 @@ async function fetchData(db) {
             
 
             //LOGGING TO SEE BATTLELOG API RESPONSE
-            console.log(`Battle log for ${tag}:`, JSON.stringify(battleLogResponse.data, null, 2));
+            //console.log(`Battle log for ${tag}:`, JSON.stringify(battleLogResponse.data, null, 2));
 
             // Update player data
             const playerData = {
@@ -387,6 +503,9 @@ async function fetchData(db) {
         for (const tag of playerTags) {
             await calculatePlayerTrend(tag, db); // Calculate trends per player
         }
+        // ... inside fetchData, after Promise.all(playerFetchPromises)
+
+        await calculateWinRates(db);
         await calculateMVP(db); // Calculate MVP of a timeframe
         await flagExceptionalPerformances(db); // Flag exceptional performances globally
 
