@@ -64,6 +64,10 @@ function parseBattleTime(battleTime) {
     }
 }
 
+function normalizeTag(tag) {
+    return tag.toUpperCase().replace(/O/g, "0");
+}
+
 async function initializeDatabase(db) {
     // Creating indexes for the 'players' collection
     await db.collection('players').createIndex({ tag: 1 }, { unique: true });
@@ -83,6 +87,8 @@ async function initializeDatabase(db) {
 
     console.log('Database indices have been initialized.');
 }
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 
 function getPlayerTrophies(battle, playerTag) {
     if (!battle.battle.players) return null;
@@ -90,173 +96,256 @@ function getPlayerTrophies(battle, playerTag) {
     return player ? player.trophies : null;
 }
 
-async function processBattleLogs(battleLogResponse, playerTag, db) {
-    logMessage(`processBattleLogs called for playerTag: ${playerTag}`);
-
-    // Check if there are battles to process
-    if (battleLogResponse.items && battleLogResponse.items.length > 0) {
-        logMessage(`Found ${battleLogResponse.items.length} battles for processing.`);
-    } else {
-        logMessage(`No new battles found for playerTag: ${playerTag}.`);
-        return;  // No battles to process
-    }
-
-    for (const battle of battleLogResponse.items) {
-        const playerTrophies = getPlayerTrophies(battle, playerTag);
-        const cstBattleTime = parseBattleTime(battle.battleTime);
-
-        // Find the player's brawler ID in the nested teams structure
-        let brawlerId;
-        if (battle.battle.teams) {
-            for (const team of battle.battle.teams) {
-                for (const player of team) {
-                    if (player.tag === playerTag) {
-                        brawlerId = player.brawler.id;
-                        break;
-                    }
-                }
-                if (brawlerId) break;
-            }
-        } else if (battle.battle.players) {
-            for (const player of battle.battle.players) {
-                if (player.tag === playerTag) {
+function findBrawlerId(battle, playerTag) {
+    let brawlerId = null;
+    if (battle.battle.teams) {
+        for (const team of battle.battle.teams) {
+            for (const player of team) {
+                //console.log(player.tag, playerTag)
+                if (normalizeTag(player.tag) === normalizeTag(playerTag)) {
                     brawlerId = player.brawler.id;
+                    logMessage(`Found player in teams. Player tag: ${player.tag}, Brawler ID: ${brawlerId}`);
                     break;
                 }
             }
+            if (brawlerId) break;
         }
-        const mapName = battle.event.map;
-        const modeName = battle.battle.mode;
-        const isWin = battle.battle.result === 'victory';
-        console.log('bruh')
-        console.log(`Brawler ID: ${playerTag} map name: ${mapName} mode name: ${modeName}`);
-
-        const winLossUpdate = isWin ? { $inc: { wins: 1 } } : { $inc: { losses: 1 } };
-
-        // Continue processing only if brawlerId is found
-        if (!brawlerId) {
-            logMessage(`Brawler ID not found for playerTag: ${playerTag} in battle.`);
-            continue;
+    } else if (battle.battle.players) {
+        for (const player of battle.battle.players) {
+            //console.log(player.tag, playerTag)
+            if (normalizeTag(player.tag) === normalizeTag(playerTag)) {
+                brawlerId = player.brawler.id;
+                logMessage(`Found player in players. Player tag: ${player.tag}, Brawler ID: ${brawlerId}`);
+                break;
+            }
         }
-        
-        if (brawlerId && mapName && modeName) {
-            await db.collection('brawlerStats').updateOne(
-                { brawlerId, mapName, modeName },
-                winLossUpdate,
-                { upsert: true }
-            );
+    }
+    return brawlerId;
+}
+
+function findBrawlerName(battle, playerTag) {
+    let brawlerName = null;
+    if (battle.battle.teams) {
+        for (const team of battle.battle.teams) {
+            for (const player of team) {
+                if (normalizeTag(player.tag) === normalizeTag(playerTag)) {
+                    if (!player.brawler.name) {
+                        logMessage(`Brawler name is undefined for player tag: ${player.tag}, Brawler ID: ${player.brawler.id}`);
+                        console.log(player); // Log the entire player object for inspection
+                    }
+                    brawlerName = player.brawler.name;
+                    logMessage(`Found player in teams. Player tag: ${player.tag}, Brawler Name: ${brawlerName}`);
+                    break;
+                }
+            }
+            if (brawlerName) break;
         }
-        // Extract required battle info
-        let battleData;
-        if (["soloShowdown", "duoShowdown"].includes(battle.battle.mode)) {
-            const isWin = battle.battle.rank === 1 || battle.battle.trophyChange > 0;
-            battleData = {
-                battleId: battle.event.id,  // Assuming a unique ID is present
-                playerTag: playerTag,
-                time: new Date(parseBattleTime(battle.battleTime)),
-                event: battle.event,
-                mode: battle.battle.mode,
-                map: battle.event.map,
-                rank: battle.battle.rank,
-                trophyChange: battle.battle.trophyChange,
-                outcome: isWin ? 'victory' : 'defeat',
-                playerTrophies: playerTrophies
-            };
-        } else {
-            battleData = {
-                battleId: battle.event.id,  // Assuming a unique ID is present
-                playerTag: playerTag,
-                time: new Date(parseBattleTime(battle.battleTime)),
-                event: battle.event,
-                mode: battle.battle.mode,
-                map: battle.event.map,
-                outcome: battle.battle.result,
-                starPlayer: battle.battle.starPlayer,
-                teams: battle.battle.teams,
-                duration: battle.battle.duration,
-                trophyChange: battle.battle.trophyChange,
-                playerTrophies: playerTrophies
-            };
+    } else if (battle.battle.players) {
+        for (const player of battle.battle.players) {
+            if (normalizeTag(player.tag) === normalizeTag(playerTag)) {
+                if (!player.brawler.name) {
+                    logMessage(`Brawler name is undefined for player tag: ${player.tag}, Brawler ID: ${player.brawler.id}`);
+                    console.log(player); // Log the entire player object for inspection
+                }
+                brawlerName = player.brawler.name;
+                logMessage(`Found player in players. Player tag: ${player.tag}, Brawler Name: ${brawlerName}`);
+                break;
+            }
         }
-        
+    }
+    return brawlerName;
+}
 
-        // Using cstBattleTime for creating the compositeId and storing in battleData
-        const compositeId = `${playerTag}-${battle.event.id}-${cstBattleTime.replace(/[^0-9]/g, '')}`;
-        battleData.compositeId = compositeId;
-        battleData.time = new Date(cstBattleTime); 
-
-        logMessage(`Attempting to update DB with compositeId: ${compositeId} for playerTag: ${playerTag}`);
-
-
-        // Logging battle data to a file
-        logMessage(`Adding/Updating battle: PlayerTag: ${playerTag}, BattleId: ${battleData.battleId}, Trophies: ${battleData.trophyChange}`);
-        
-        // Update battle info in DB using compositeId
-        try {
-            await db.collection('battles').updateOne(
-                { compositeId: compositeId },
-                { $set: battleData },
-                { upsert: true }
-            );
-            logMessage(`DB update successful for battleId: ${battleData.battleId}, playerTag: ${playerTag}`);
-        } catch (dbError) {
-            logMessage(`Error updating battle in DB: ${dbError.message}`);
-        }
-
-        // Update achievements and player stats
-        const incrementFields = { totalBattles: 1 };
-        if (battleData.outcome === 'victory') {
-            incrementFields['totalVictories'] = 1;
-            incrementFields['winStreak'] = 1;
-            incrementFields['lossStreak'] = 0; // Reset lossStreak on victory
-        } else {
-            incrementFields['lossStreak'] = 1; // Increment lossStreak on defeat
-            // Need to handle resetting the winStreak on a defeat.
-            incrementFields['winStreak'] = 0; // Reset winStreak on defeat
-        }
-
-        let incrementPlayerStats = {
-            'battlesPlayed': 1,
-            'lossStreak': battleData.outcome === 'defeat' ? 1 : -1
-        };
-
-        // Updating trophies and calculating stats
-        // Ensure trophyChange is a number and has a value before incrementing
-        if (typeof battleData.trophyChange === 'number') {
-            incrementPlayerStats['totalTrophiesWon'] = battleData.trophyChange;
-        } else {
-            logMessage(`Warning: Invalid trophyChange for battleId: ${battleData.battleId}, playerTag: ${playerTag}`);
-        }
-
-        // Update the achievements and playerStats collection
-        await db.collection('achievements').updateOne(
-            { playerTag: playerTag },
-            { $inc: incrementFields, $set: { lastBattleTime: battleData.time } },
+async function updateBrawlerStatsInDb(brawlerName, mapName, modeName, battle, db) {
+    const winLossUpdate = battle.battle.result === 'victory' ? { $inc: { wins: 1 } } : { $inc: { losses: 1 } };
+    try {
+        await db.collection('brawlerStats').updateOne(
+            { brawlerName, mapName, modeName },
+            { ...winLossUpdate, $setOnInsert: { winRate: "0.00" } },
             { upsert: true }
         );
-
-        await db.collection('playerStats').updateOne(
-            { playerTag: playerTag },
-            { 
-                $inc: {
-                    incrementPlayerStats,
-                    'battlesPlayed': 1,
-                    'trophies': battleData.trophyChange,
-                    // Assuming lossStreak is part of playerStats
-                    'lossStreak': battleData.outcome === 'defeat' ? 1 : -1
-                },
-                $set: { lastActive: battleData.time },
-                $max: { 'highestTrophies': playerTrophies },
-                // Ensure to reset the streak correctly
-                $setOnInsert: { 'lossStreak': battleData.outcome === 'defeat' ? 1 : 0 }
-            },
-            { upsert: true }
-        );
-
-        // Historical data updates for trend analysis
-        await db.collection('battleHistory').insertOne({ ...battleData, timeStamp: new Date() });
+        logMessage(`Stats updated for Brawler: ${brawlerName}, Map: ${mapName}, Mode: ${modeName}.`);
+    } catch (error) {
+        logMessage(`Error updating Brawler stats in DB: ${error.message}`);
     }
 }
+
+async function calculateAndStoreWinRates(db) {
+    const cursor = db.collection('brawlerStats').find({});
+    for await (const brawlerStat of cursor) {
+        // Treat undefined losses as 0
+        const losses = brawlerStat.losses || 0;
+        const totalBattles = brawlerStat.wins + losses;
+        const winRate = totalBattles > 0 ? (brawlerStat.wins / totalBattles) * 100 : 0;
+        await db.collection('brawlerStats').updateOne(
+            { _id: brawlerStat._id },
+            { $set: { winRate: winRate.toFixed(2) } }
+        );
+        logMessage(`Win rate updated for brawlerName: ${brawlerStat.brawlerName} to ${winRate.toFixed(2)}%`);
+    }
+}
+function prepareBattleData(battle, playerTag, cstBattleTime, brawlerId) {
+    const isWin = battle.battle.result === 'victory';
+    const battleData = {
+        battleId: battle.event.id, // Assuming a unique ID is present
+        playerTag: playerTag,
+        time: new Date(cstBattleTime),
+        event: battle.event,
+        mode: battle.battle.mode,
+        map: battle.event.map,
+        outcome: isWin ? 'victory' : 'defeat',
+        brawlerId: brawlerId,
+        brawlerName: findBrawlerName(battle, playerTag)
+        // Additional fields can be added here as needed
+    };
+
+    if (battle.battle.rank) {
+        battleData.rank = battle.battle.rank;
+        battleData.trophyChange = battle.battle.trophyChange;
+    }
+
+    if (battle.battle.starPlayer) {
+        battleData.starPlayer = battle.battle.starPlayer;
+        battleData.teams = battle.battle.teams;
+        battleData.duration = battle.battle.duration;
+    }
+
+    battleData.playerTrophies = getPlayerTrophies(battle, playerTag);
+
+    return battleData;
+}
+
+async function updateBattleInDb(battleData, db) {
+    const compositeId = `${battleData.playerTag}-${battleData.battleId}-${battleData.time.getTime()}`;
+    try {
+        await db.collection('battles').updateOne(
+            { compositeId: compositeId },
+            { $set: battleData },
+            { upsert: true }
+        );
+        logMessage(`DB update successful for battleId: ${battleData.battleId}, playerTag: ${battleData.playerTag}`);
+    } catch (error) {
+        logMessage(`Error updating battle in DB: ${error.message}`);
+    }
+}
+
+
+async function processEachBattle(battle, playerTag, db, battleStats) {
+    const cstBattleTime = parseBattleTime(battle.battleTime);
+    const brawlerId = findBrawlerId(battle, playerTag);
+    if (!brawlerId) return;
+
+    const mapName = battle.event.map;
+    const modeName = battle.battle.mode;
+
+    const brawlerName = findBrawlerName(battle, playerTag);
+    await updateBrawlerStatsInDb(brawlerName, mapName, modeName, battle, db);
+    const battleData = prepareBattleData(battle, playerTag, cstBattleTime, brawlerId);
+    await updateBattleInDb(battleData, db);
+
+    battleStats.wins += battleData.outcome === 'victory' ? 1 : 0;
+    battleStats.losses += battleData.outcome === 'defeat' ? 1 : 0;
+
+    await updatePlayerStatsInDb(playerTag, battleData, db, battleStats);
+
+    // Delay to prevent rate limiting, if needed
+    await sleep(100);
+}
+
+function logBattleOutcome(battleData) {
+    // This could be a console log or logging to a file or external system
+    console.log(`Battle outcome for playerTag: ${battleData.playerTag}, BattleId: ${battleData.battleId}, Outcome: ${battleData.outcome}`);
+}
+
+async function updatePlayerStatsInDb(playerTag, battleData, db, battleStats) {
+    const increments = {
+        'battlesPlayed': 1,
+        'trophies': battleData.trophyChange || 0 // Fallback to 0 if trophyChange is not a number
+    };
+
+    // This line prepares the path for the nested brawler stats
+    const brawlerStatPath = `brawlerStats.${battleData.brawlerName}.${battleData.mode}`;
+
+    const brawlerUsagePath = `brawlerStats.${battleData.brawlerName}.usage`;
+    const brawlerUsageIncrement = { $inc: { [brawlerUsagePath]: 1 } };
+
+    // Prepare win or loss increment
+    const winLossUpdate = battleData.outcome === 'victory' ? 
+        { $inc: { [`${brawlerStatPath}.wins`]: 1 } } : 
+        { $inc: { [`${brawlerStatPath}.losses`]: 1 } };
+
+    if (battleData.outcome === 'victory') {
+        increments['winStreak'] = 1;
+        increments['lossStreak'] = 0;
+    } else if (battleData.outcome === 'defeat') {
+        increments['winStreak'] = 0;
+        increments['lossStreak'] = 1;
+    }
+
+    try {
+        // First, update the win or loss count
+        await db.collection('playerStats').updateOne(
+            { playerTag: playerTag },
+            winLossUpdate,
+            brawlerUsageIncrement,
+            { upsert: true }
+        );
+
+        // Then, retrieve the updated stats to calculate the win rate
+        const playerStat = await db.collection('playerStats').findOne({ playerTag: playerTag });
+        const brawlerModeStats = playerStat.brawlerStats[battleData.brawlerName][battleData.mode] || { wins: 0, losses: 0 };
+        const wins = brawlerModeStats.wins || 0; // Ensure wins is set to 0 if undefined
+        const losses = brawlerModeStats.losses || 0; // Ensure losses is set to 0 if undefined
+        const totalBattles = wins + losses;
+        const winRate = totalBattles > 0 ? (wins / totalBattles) * 100 : 0;
+
+        // Finally, update the win rate
+        await db.collection('playerStats').updateOne(
+            { playerTag: playerTag },
+            {
+                $set: { 
+                    [`${brawlerStatPath}.winRate`]: winRate.toFixed(2),
+                    'lastActive': battleData.time,
+                    'lastOutcome': battleData.outcome
+                },
+                $inc: increments,
+                $max: { 'highestTrophies': battleData.playerTrophies }
+            }
+        );
+
+        logMessage(`Player stats updated for playerTag: ${playerTag}`);
+    } catch (error) {
+        logMessage(`Error updating player stats in DB: ${error.message}`);
+    }
+}
+
+function calculateWinRate(wins, totalBattles) {
+    return totalBattles > 0 ? (wins / totalBattles) * 100 : 0;
+}
+
+
+async function processBattleLogs(battleLogResponse, playerTag, db) {
+    logMessage(`processBattleLogs called for playerTag: ${playerTag}`);
+
+    if (!battleLogResponse.items || battleLogResponse.items.length === 0) {
+        logMessage(`No new battles found for playerTag: ${playerTag}.`);
+        return;
+    }
+
+    logMessage(`Found ${battleLogResponse.items.length} battles for processing.`);
+    let battleStats = { wins: 0, losses: 0 };
+
+    for (const battle of battleLogResponse.items) {
+        await processEachBattle(battle, playerTag, db, battleStats);
+    }
+
+    const winRate = calculateWinRate(battleStats.wins, battleStats.wins + battleStats.losses);
+    logMessage(`Win rate for playerTag: ${playerTag} is ${winRate.toFixed(2)}%`);
+    calculateAndStoreWinRates(db);
+
+    // Additional logging and updates can be done here...
+}
+
 
 async function calculateWinRates(db) {
     const brawlers = await db.collection('brawlerStats').find({}).toArray();
@@ -432,7 +521,7 @@ async function fetchData(db) {
             
 
             //LOGGING TO SEE BATTLELOG API RESPONSE
-            //console.log(`Battle log for ${tag}:`, JSON.stringify(battleLogResponse.data, null, 2));
+            console.log(`Battle log for ${tag}:`, JSON.stringify(battleLogResponse.data, null, 2));
 
             // Update player data
             const playerData = {
@@ -452,13 +541,13 @@ async function fetchData(db) {
             logMessage(`Last Battle Time for ${tag}: ${lastBattleTime?.lastBattleTime || "No previous battles logged"}`);
             
             // Log the battle times from the API response
-            if (battleLogResponse && battleLogResponse.data && battleLogResponse.data.items) {
-                battleLogResponse.data.items.forEach((item, index) => {
-                    logMessage(`API Battle Time for ${tag} - Battle ${index + 1}: ${item.battleTime}`);
-                });
-            } else {
-                logMessage(`Battle log response for ${tag} is empty or invalid.`);
-            }
+            //if (battleLogResponse && battleLogResponse.data && battleLogResponse.data.items) {
+                //battleLogResponse.data.items.forEach((item, index) => {
+                    //logMessage(`API Battle Time for ${tag} - Battle ${index + 1}: ${item.battleTime}`);
+                //});
+            //} else {
+                //logMessage(`Battle log response for ${tag} is empty or invalid.`);
+            //}
             
             const newBattles = battleLogResponse.data.items.filter(battle => {
                 const format = "YYYYMMDDTHHmmss.SSSZ";
@@ -474,22 +563,22 @@ async function fetchData(db) {
                     return false; // consider appropriate action here
                 }
                 
-                logMessage(`Parsed API Date for ${tag} - ${battle.battleTime}: ${parsedAPIDate.toISOString()}`);
-                logMessage(`Parsed Last Battle Date for ${tag}: ${parsedLastBattleDate.toISOString()}`);
+                //logMessage(`Parsed API Date for ${tag} - ${battle.battleTime}: ${parsedAPIDate.toISOString()}`);
+                //logMessage(`Parsed Last Battle Date for ${tag}: ${parsedLastBattleDate.toISOString()}`);
                 
                 const isBattleNew = parsedAPIDate > parsedLastBattleDate;
-                logMessage(`Is Battle New for ${tag}? ${isBattleNew}`);
+                //logMessage(`Is Battle New for ${tag}? ${isBattleNew}`);
                 
                 return isBattleNew;
             });
             
             
             if (newBattles.length > 0) {
-                logMessage(`New battles for ${tag}: ${newBattles.length}`);
+                //logMessage(`New battles for ${tag}: ${newBattles.length}`);
                 console.log(`New Battles for ${tag}:`, JSON.stringify(newBattles, null, 2)); // Detailed view of new battles
                 await processBattleLogs({ items: newBattles }, tag, db);
             } else{
-                logMessage(`No new battles for ${tag}`);
+                //logMessage(`No new battles for ${tag}`);
             }
 
             // After updating battles, check for updates in leaderboards and milestones
