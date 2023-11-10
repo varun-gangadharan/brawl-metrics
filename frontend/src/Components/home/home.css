@@ -1,0 +1,59 @@
+.home-container {
+    font-family: 'Poppins', sans-serif; /* Cartoonish yet modern font */
+    text-align: center;
+    padding: 20px;
+    background-color: #f0e5f9; /* Soft purple background */
+    color: #333;
+}
+
+.home-container h1 {
+    color: #8e44ad; /* Vibrant purple */
+    font-size: 2.5em;
+    text-shadow: 2px 2px #2ecc71; /* Green shadow for depth */
+}
+
+.home-container p {
+    color: #2ecc71; /* Bright green */
+    margin-bottom: 30px;
+    font-size: 1.2em;
+}
+
+.stats-container {
+    background-color: #ffefd5; /* Peach background for contrast */
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Soft shadow for depth */
+}
+
+.search-bar {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.search-bar input {
+    padding: 10px;
+    border: 2px solid #8e44ad; /* Vibrant purple border */
+    border-right: none;
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+    background-color: #fdebd0; /* Soft orange background */
+    color: #8e44ad; /* Text color */
+}
+
+.search-bar button {
+    padding: 10px 20px;
+    background-color: #2ecc71; /* Bright green */
+    color: white;
+    border: none;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.search-bar button:hover {
+    background-color: #27ae60; /* Darker green on hover */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Shadow effect on hover */
+}

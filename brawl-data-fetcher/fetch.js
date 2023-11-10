@@ -419,6 +419,13 @@ async function calculateMVP(db, timeframe = 'weekly') {
     ];
 
     const results = await db.collection('battles').aggregate(pipeline).toArray();
+    if (results.length > 0) {
+        await db.collection('records').updateOne(
+            { recordType: 'MVP', timeframe: timeframe },
+            { $set: { playerTag: results[0]._id, totalTrophies: results[0].totalTrophies } },
+            { upsert: true }
+        );
+    }
     console.log(`MVP ${timeframe}:`, results);
 }
 
@@ -446,6 +453,13 @@ async function calculateMostImprovedPlayer(db, timeframe = 30) {
 
     const result = await db.collection('playerStats').aggregate(pipeline).toArray();
     if (result.length > 0) {
+        // Update Most Improved Player in the database
+        await db.collection('records').updateOne(
+            { recordType: 'Most Improved Player', timeframe: timeframe },
+            { $set: { playerTag: result[0].playerTag, trophyIncrease: result[0].trophyIncrease } },
+            { upsert: true }
+        );
+
         console.log(`Most Improved Player:`, result[0]);
     } else {
         console.log("No player improvement data available for the specified timeframe.");
@@ -596,6 +610,7 @@ async function fetchData(db) {
 
         await calculateWinRates(db);
         await calculateMVP(db); // Calculate MVP of a timeframe
+        await calculateMostImprovedPlayer(db);
         await flagExceptionalPerformances(db); // Flag exceptional performances globally
 
     } catch (error) {
