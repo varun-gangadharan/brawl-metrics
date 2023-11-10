@@ -1,0 +1,41 @@
+.leaderboard-container {
+    font-family: 'Poppins', sans-serif;
+    text-align: center;
+    padding: 20px;
+    background-color: #f0e5f9; /* Soft purple background */
+    color: #333;
+}
+
+.leaderboard-container h1 {
+    color: #8e44ad; /* Vibrant purple */
+    font-size: 2em;
+    text-shadow: 2px 2px #2ecc71; /* Green shadow for depth */
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+table, th, td {
+    border: 2px solid #2ecc71; /* Bright green border */
+}
+
+th, td {
+    padding: 10px;
+    text-align: left;
+}
+
+th {
+    background-color: #8e44ad; /* Vibrant purple header */
+    color: white;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #ffefd5; /* Soft orange for rows */
+}
+
+tbody tr:hover {
+    background-color: #fdebd0; /* Slightly darker orange on hover */
+}

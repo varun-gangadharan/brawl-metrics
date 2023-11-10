@@ -1,0 +1,33 @@
+.oopsie-container {
+    font-family: 'Poppins', sans-serif;
+    text-align: center;
+    padding: 20px;
+    background-color: #fdebd0; /* Soft orange background */
+    color: #333;
+}
+
+.oopsie-container h1 {
+    color: #2ecc71; /* Bright green */
+    font-size: 2em;
+    text-shadow: 2px 2px #8e44ad; /* Purple shadow for depth */
+}
+
+.oopsie-list {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+}
+
+.player-oopsie {
+    background-color: #f0e5f9; /* Soft purple background */
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Soft shadow for depth */
+    width: 200px; /* Adjust as needed */
+}
+
+.player-oopsie h2 {
+    color: #8e44ad; /* Vibrant purple */
+    font-size: 1.5em;
+}

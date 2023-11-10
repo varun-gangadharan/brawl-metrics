@@ -1,0 +1,18 @@
+.data-vis-container {
+    font-family: 'Poppins', sans-serif;
+    padding: 20px;
+    text-align: center;
+}
+
+.chart-container {
+    background-color: #fdebd0; /* Soft orange background */
+    margin-bottom: 20px;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.chart-container h2 {
+    color: #8e44ad; /* Vibrant purple */
+    margin-bottom: 20px;
+}
