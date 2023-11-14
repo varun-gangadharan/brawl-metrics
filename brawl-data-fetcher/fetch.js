@@ -221,7 +221,8 @@ async function updateBattleInDb(battleData, db) {
         await db.collection('battles').updateOne(
             { compositeId: compositeId },
             { $set: battleData },
-            { upsert: true }
+            { upsert: true },
+            {brawlerUsed: battleData.brawlerName}
         );
         logMessage(`DB update successful for battleId: ${battleData.battleId}, playerTag: ${battleData.playerTag}`);
     } catch (error) {

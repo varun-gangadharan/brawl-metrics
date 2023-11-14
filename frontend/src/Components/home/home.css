@@ -1,59 +1,120 @@
 .home-container {
-    font-family: 'Poppins', sans-serif; /* Cartoonish yet modern font */
+    font-family: 'Poppins', sans-serif;
     text-align: center;
     padding: 20px;
-    background-color: #f0e5f9; /* Soft purple background */
+    background-color: #f0e5f9;
     color: #333;
 }
 
 .home-container h1 {
-    color: #8e44ad; /* Vibrant purple */
+    color: #8e44ad;
     font-size: 2.5em;
-    text-shadow: 2px 2px #2ecc71; /* Green shadow for depth */
+    text-shadow: 2px 2px #2ecc71;
 }
 
 .home-container p {
-    color: #2ecc71; /* Bright green */
+    color: #2ecc71;
     margin-bottom: 30px;
     font-size: 1.2em;
 }
 
 .stats-container {
-    background-color: #ffefd5; /* Peach background for contrast */
+    display: flex;
+    background-color: #ffefd5;
     padding: 20px;
     border-radius: 10px;
     margin-bottom: 20px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Soft shadow for depth */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    justify-content: space-between;
 }
 
-.search-bar {
-    display: flex;
-    justify-content: center;
+.column {
+    flex: 1;
+    padding: 10px;
+    margin: 0 10px;
+    background-color: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    position: relative; /* For pseudo-element positioning */
+    overflow: hidden; /* Ensures pseudo-elements stay within the container */
+}
+
+.column h3 {
+    color: #34495e;
+    margin-bottom: 15px;
+    position: relative; /* For z-index */
+    z-index: 1; /* To stay above pseudo-elements */
+}
+
+.column ul {
+    list-style-type: none;
+    padding: 0;
+    position: relative; /* For z-index */
+    overflow: hidden;
+    z-index: 1; /* To stay above pseudo-elements */
+}
+
+.column li {
+    background-color: #ecf0f1;
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    color: #2c3e50;
+    position: relative; /* For z-index */
+    z-index: 1; /* To stay above pseudo-elements */
+    transition: transform 0.3s, box-shadow 0.3s; /* Smooth hover effect */
+}
+
+.column li:last-child {
+    margin-bottom: 0;
+}
+
+.column li:hover {
+    transform: scale(1.05); /* Slightly enlarges the item */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* More prominent shadow */
+}
+
+.column::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: linear-gradient(to right bottom, #8e44ad, #2ecc71); /* Diagonal gradient */
+    opacity: 0.1; /* Subtle effect */
+    pointer-events: none; /* Allows clicks to pass through */
+}
+
+.home-container .biggest-sweat {
+    color: #c0392b; /* Red color for emphasis */
+    font-weight: bold;
     margin-bottom: 20px;
 }
 
-.search-bar input {
-    padding: 10px;
-    border: 2px solid #8e44ad; /* Vibrant purple border */
-    border-right: none;
-    border-top-left-radius: 5px;
-    border-bottom-left-radius: 5px;
-    background-color: #fdebd0; /* Soft orange background */
-    color: #8e44ad; /* Text color */
-}
-
-.search-bar button {
-    padding: 10px 20px;
-    background-color: #2ecc71; /* Bright green */
-    color: white;
-    border: none;
-    border-top-right-radius: 5px;
-    border-bottom-right-radius: 5px;
+.battle-summary {
     cursor: pointer;
-    transition: background-color 0.3s;
+    font-weight: bold;
 }
 
-.search-bar button:hover {
-    background-color: #27ae60; /* Darker green on hover */
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Shadow effect on hover */
+.battle-details {
+    display: none;
+    padding-top: 10px;
 }
+
+.battle-details.open {
+    display: block;
+}
+
+.column li.battle-win {
+    background-color: #28a745;
+    color: white;
+}
+
+.column li.battle-loss {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Add any additional styling as needed */
