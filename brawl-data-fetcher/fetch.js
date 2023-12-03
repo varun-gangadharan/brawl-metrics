@@ -272,15 +272,20 @@ async function updatePlayerStatsInDb(playerTag, battleData, db, battleStats) {
 
     // Prepare win or loss increment
     const winLossUpdate = battleData.outcome === 'victory' ? 
-        { $inc: { [`${brawlerStatPath}.wins`]: 1 } } : 
-        { $inc: { [`${brawlerStatPath}.losses`]: 1 } };
+    { $inc: { [`${brawlerStatPath}.wins`]: 1 } } : 
+    { $inc: { [`${brawlerStatPath}.losses`]: 1 } };
+
+    // Assuming `currentPlayerStats` contains the latest stats of the player before this update
+    // You would fetch this from your database before executing this update logic
 
     if (battleData.outcome === 'victory') {
-        increments['winStreak'] = 1;
-        increments['lossStreak'] = 0;
+        // If the last outcome was also a victory, increment winStreak, else set to 1
+        increments['winStreak'] = currentPlayerStats.winStreak > 0 ? currentPlayerStats.winStreak + 1 : 1;
+        increments['lossStreak'] = 0; // Reset lossStreak as the current outcome is a victory
     } else if (battleData.outcome === 'defeat') {
-        increments['winStreak'] = 0;
-        increments['lossStreak'] = 1;
+        // If the last outcome was also a defeat, increment lossStreak, else set to 1
+        increments['lossStreak'] = currentPlayerStats.lossStreak > 0 ? currentPlayerStats.lossStreak + 1 : 1;
+        increments['winStreak'] = 0; // Reset winStreak as the current outcome is a defeat
     }
 
     try {

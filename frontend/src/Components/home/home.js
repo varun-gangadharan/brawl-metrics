@@ -12,12 +12,26 @@ const Home = () => {
     const [quickStats, setQuickStats] = useState(null);
     const [biggestSweat, setBiggestSweat] = useState(null); // Changed to null
     const [topBrawlers, setTopBrawlers] = useState([]);
-    const [expandedBattles, setExpandedBattles] = useState({});
+    const [expandedBattles, setExpandedBattles] = useState({
+        'Solo Queue': {},
+        'Queue with the Boys': {}
+    });
 
     useEffect(() => {
         axios.get('/api/quick-stats')
             .then(response => {
                 setQuickStats(response.data);
+    
+                // Initialize expandedBattles state for each battle
+                const newExpandedBattles = {};
+                Object.keys(response.data.groupedBattles).forEach(category => {
+                    newExpandedBattles[category] = {};
+                    response.data.groupedBattles[category].forEach((_, index) => {
+                        newExpandedBattles[category][index] = true;
+                    });
+                });
+    
+                setExpandedBattles(newExpandedBattles);
             })
             .catch(error => {
                 console.error('Error fetching quick stats', error);
@@ -49,7 +63,7 @@ const Home = () => {
         });
     
         if (!sweat) { // In case there's a tie or no matches
-            sweat = 'No clear biggest sweat';
+            sweat = 'No clear biggest sweat, whole squad equally buns';
         }
         
         setBiggestSweat(sweat);
@@ -65,18 +79,26 @@ const Home = () => {
     };
 
     const toggleBattleDetails = (index, category) => {
-        setExpandedBattles(prevState => ({
-            ...prevState,
-            [category]: {
-                ...prevState[category],
-                [index]: !prevState[category]?.[index]
-            }
-        }));
+        console.log("Before toggle:", expandedBattles[category][index]); // Log before toggle
+    
+        setExpandedBattles(prevState => {
+            const newCategoryState = { ...prevState[category] };
+            newCategoryState[index] = !newCategoryState[index];
+            console.log(`Toggled battle index ${index} in category ${category}:`, newCategoryState[index]);
+    
+            console.log("After toggle:", newCategoryState[index]); // Log after toggle
+            return {
+                ...prevState,
+                [category]: newCategoryState
+            };
+        });
     };
+    
 
     const renderBattles = (battles, category) => {
         return battles.map((battle, index) => {
-            console.log("Battle outcome:", battle.outcome); 
+            console.log(`Rendering battle index ${index} in category ${category}:`, battle);
+            console.log(`Is battle expanded? ${expandedBattles[category][index]}`);
             const outcomeClass = battle.outcome === 'victory' ? 'battle-win' : 'battle-loss';
     
             return (
@@ -84,7 +106,9 @@ const Home = () => {
                     <div className="battle-summary" onClick={() => toggleBattleDetails(index, category)}>
                         {battle.summary}
                     </div>
-                    <div className={`battle-details ${expandedBattles[category]?.[index] ? 'open' : ''}`}>
+
+                    <div className={`battle-details ${expandedBattles[category][index] ? 'open' : ''}`}>
+
                         <ul>
                             <li>Brawler: {battle.details}</li>
                             <li>Mode: {battle.gameMode}</li>

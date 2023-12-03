@@ -1,26 +1,395 @@
-.profile-container {
-    font-family: 'Poppins', sans-serif;
-    text-align: center;
+@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap');
+
+
+
+
+.profile {
+    max-width: 1200px;
+    margin: 20px auto;
     padding: 20px;
-    background-color: #fdebd0; /* Soft orange background */
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    background-color: #f7f8fa; /* Soft background */
+    font-family: 'Poppins', sans-serif; /* Consistent with home.css */
     color: #333;
 }
 
-.profile-container h1 {
-    color: #8e44ad; /* Vibrant purple */
-    font-size: 2em;
-    text-shadow: 2px 2px #2ecc71; /* Green shadow for depth */
+.player-info {
+    background-color: #f0e5f9;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
-.player-stats, .brawler-stats, .recent-battles {
-    background-color: #f0e5f9; /* Soft purple background */
-    padding: 15px;
-    margin: 20px 0;
+
+.loading {
+    text-align: center;
+    font-size: 20px;
+    margin-top: 50px;
+    color: #8e44ad; /* Purple text */
+}
+
+
+.tabs {
+    display: flex;
+    margin-bottom: 20px;
+    justify-content: center;
+    background-color: #e8d5f9; /* Lighter shade of purple for a smoother transition */
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.tab, .brawler, .stats-group {
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.tab {
+    padding: 10px 20px;
+    border: none;
+    cursor: pointer;
+    background-color: #8e44ad;
+    color: white;
+    transition: background-color 0.3s, transform 0.3s;
+}
+
+.tab:hover {
+    background-color: #9e5ebd; /* Slightly lighter purple on hover */
+    transform: scale(1.05); /* Slight enlargement for interaction feedback */
+}
+
+.tab.active {
+    background-color: #2ecc71; /* Keeping the active state green */
+}
+
+
+
+.tab-content {
+    border: 1px solid #ccc;
+    padding: 20px;
     border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Soft shadow for depth */
+    background-color: white; /* Clear content background */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Subtle shadow for depth */
+    display: none;
+    width: 100%;
 }
 
-.brawler-stats h2, .recent-battles h2 {
-    color: #2ecc71; /* Bright green */
-    font-size: 1.5em;
+.tab-content.active {
+    display: block;
 }
+
+/* Brawler list grid with larger gaps for a more spread out look */
+.brawler-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.brawler {
+    border: 2px solid #8e44ad; /* Purple border */
+    padding: 15px;
+    border-radius: 15px;
+    text-align: center;
+    background-color: #f0e5f9; /* Soft purple background */
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.brawler:hover {
+    transform: translateY(-10px); /* Lift effect on hover */
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    animation: pop 0.5s ease;
+}
+
+.tab, .brawler, .stats-group {
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.brawler h3 {
+    color: #34495e; /* Dark text for contrast */
+    margin-bottom: 10px;
+}
+
+
+.brawler p {
+    margin: 5px 0;
+}
+
+.stats-view-toggle {
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+}
+
+.stats-group {
+    background-color: #ffffff; /* Bright background for clarity */
+    border: 2px solid #8e44ad; /* Purple border */
+    padding: 15px;
+    border-radius: 15px;
+    margin-bottom: 20px;
+    position: relative; /* For pseudo-element positioning */
+    overflow: hidden; /* Ensures pseudo-elements stay within the container */
+}
+
+.stats-group::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: linear-gradient(to right, #8e44ad, #2ecc71); /* Diagonal gradient */
+    opacity: 0.1; /* Subtle effect */
+    pointer-events: none; /* Allows clicks to pass through */
+    border-radius: 15px; /* Rounded corners */
+}
+
+.stats-group h3 {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.stats-group h3::after {
+    content: '+';
+    margin-left: 10px;
+    transition: transform 0.3s ease;
+}
+
+.stats-group h3.open::after {
+    content: '−';
+    transform: rotate(45deg);
+}
+
+.stat {
+    background-color: #ecf0f1; /* Light background for each stat */
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 10px;
+    transition: background-color 0.3s, transform 0.3s;
+}
+
+.stat:hover {
+    background-color: #f0e5f9; /* Light purple on hover */
+    transform: scale(1.03); /* Slight enlargement for interaction feedback */
+}
+/* Styling Buttons */
+.stats-view-toggle button {
+    background-color: #8e44ad;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    margin: 0 5px;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+.stats-view-toggle button:hover {
+    background-color: #a65fbd;
+    transform: scale(1.05);
+}
+
+
+.stat:last-child {
+    border-bottom: none;
+}
+@media screen and (max-width: 600px) {
+    .stats-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+}
+
+/* Player Profile and Trophies Styling */
+.profile-header {
+    background-color: #f0e5f9;
+    padding: 15px;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.profile-header h1 {
+    color: #34495e;
+    margin-bottom: 5px;
+}
+
+.profile-header .trophies {
+    color: #8e44ad;
+    font-weight: bold;
+}
+
+.holistic-stats {
+    background-color: #2ecc71; /* Green background for holistic stats */
+    color: white; /* White text for contrast */
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    position: relative;
+}
+
+.holistic-stats::before {
+    content: '';
+    position: absolute;
+    top: -10px; right: -10px;
+    width: 40px; height: 40px;
+    background-color: #8e44ad; /* Purple accent */
+    border-radius: 50%;
+    opacity: 0.7;
+}
+
+.brawler, .battle-card {
+    transform: translateY(0);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.recent-battles {
+    background-color: #f0e5f9; /* Light purple background */
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.brawler:hover, .battle-card:hover {
+    transform: translateY(-5px); /* Lift effect on hover */
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* Animated gradient for tabs */
+.tab.active, .tab:hover {
+    background-image: linear-gradient(45deg, #8e44ad, #2ecc71);
+    color: #fff;
+}
+
+
+.team {
+    border-top: 2px dashed #8e44ad; /* Dashed purple line for separation */
+    padding-top: 10px;
+    margin-top: 10px;
+}
+
+.team h4 {
+    cursor: pointer;
+    color: #2ecc71; /* Green for team headers */
+    margin-bottom: 10px;
+}
+
+
+.player-info {
+    margin-left: 20px;
+}
+
+.recent-battles {
+    background-color: #f0e5f9; /* Light purple background */
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.battle-card h3, .battle-card p {
+    color: #34495e; /* Darker color for better contrast */
+    margin: 5px 0;
+}
+
+.battle-details {
+    display: block; /* or flex, depending on your layout */
+    background-color: #e8e8e8; /* Light background for details */
+    border-radius: 5px;
+    padding: 10px;
+    margin-top: 15px; /* Spacing above details */
+}
+
+.team {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #8e44ad; /* Purple line for team separation */
+}
+
+.team h4 {
+    color: #2ecc71; /* Green color for team headers */
+    cursor: pointer;
+    margin-bottom: 5px;
+}
+
+.player-info {
+    margin-left: 20px;
+    color: #34495e; /* Dark text for player info */
+}
+
+.profile-pic {
+    width: 150px; /* Adjust the width as needed */
+    height: 150px; /* Adjust the height as needed */
+    object-fit: cover; /* This ensures the image doesn't get squished */
+    border-radius: 50%; /* Makes the image circular, remove if not needed */
+    border: 3px solid #8e44ad; /* Optional: Adds a border, adjust color as needed */
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1); /* Optional: Adds a subtle shadow */
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.profile-pic:hover {
+    transform: scale(1.1); /* Slightly increase size */
+    box-shadow: 0px 8px 15px rgba(0, 0, 0, 0.2); /* Add shadow for depth */
+}
+
+
+.profile-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* ... existing styles ... */
+}
+
+.profile-header .last-active {
+    color: #34495e; /* Dark color for text */
+    margin-top: 10px; /* Spacing from the profile name */
+    font-size: 0.9em; /* Smaller font size */
+}
+
+.battle-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 10px;
+    z-index: -1; /* Put the overlay below the text */
+}
+
+.battle-card.victory::before {
+    background-color: #a3d9a5; /* Softer green */
+    opacity: 0.2; /* More subtle */
+}
+
+.battle-card.defeat::before {
+    background-color: #f9b8b8; /* Softer red */
+    opacity: 0.2; /* More subtle */
+}
+.battle-card {
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    border-radius: 10px;
+    background-color: #ffffff; /* Light background for better readability */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.battle-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.battle-card.expanded {
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3); /* More prominent shadow */
+    /* Additional styles for expanded cards */
+    padding: 20px; /* Increase padding */
+    background-color: #f5f5f5; /* Slightly different background to highlight expansion */
+    max-height: none; /* Remove any max height restriction */
+    overflow: visible; /* Ensure content is not hidden */
+}   

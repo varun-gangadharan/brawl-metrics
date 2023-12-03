@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const cors = require('cors');
 const { MongoClient } = require('mongodb');
 const app = express();
 const port = 3001;
@@ -7,6 +8,7 @@ const port = 3001;
 app.use(express.json());
 
 
+app.use(cors());
 
 const MONGO_URI = process.env.MONGO_URI;
 const client = new MongoClient(MONGO_URI, { useUnifiedTopology: true });
@@ -30,6 +32,10 @@ const tagToUsernameMap = {
 const getPlayerUsername = (tag) => {
     return tagToUsernameMap[tag] || tag;
 };
+
+app.get('/api/test', (req, res) => {
+    res.json({ message: 'Test endpoint is working' });
+});
 
 // Quick Stats Endpoint
 app.get('/api/quick-stats', async (req, res) => {
@@ -133,8 +139,6 @@ app.get('/api/quick-stats', async (req, res) => {
             groups['Solo Queue'] = [...groups['Solo Queue'], ...newGroups['Solo Queue']].slice(0, maxBattlesToShow);
             groups['Queue with the Boys'] = [...groups['Queue with the Boys'], ...newGroups['Queue with the Boys']].slice(0, maxBattlesToShow);
 
-            console.log("Final Grouped Battles:", groups);
-
             // Check if the required number of battles is reached
             if (groups['Solo Queue'].length >= maxBattlesToShow && groups['Queue with the Boys'].length >= maxBattlesToShow) break;
 
@@ -158,14 +162,8 @@ app.get('/api/quick-stats', async (req, res) => {
         combinedBrawlers.sort((a, b) => b.trophies - a.trophies);
 
         // Select top 7 brawlers
-        const topBrawlers = combinedBrawlers.slice(0, 7);
-
+        const topBrawlers = combinedBrawlers.slice(0, 10);
         
-        console.log("Grouped Battles:", groups);
-
-        console.log("Final Grouped Battles:", groups);
-        
-
         res.json({ recentTrophyChanges, groupedBattles: groups, topBrawlers });
     } catch (error) {
         console.error('Error in /api/quick-stats:', error.message);
@@ -178,7 +176,6 @@ function groupBattlesByPlayers(battles) {
     let groups = { 'Solo Queue': [], 'Queue with the Boys': [] };
 
     battles.forEach(battle => {
-        console.log("Processing battle for grouping:", battle);
         if (!battle.event) {
             console.error('Battle with missing event object:', battle);
             return;
@@ -235,23 +232,50 @@ function groupBattlesByPlayers(battles) {
 }
 
 
-
-
-
 // Player Search by Tag Endpoint
 app.get('/api/players/search/:tag', async (req, res) => {
     try {
-        const playerData = await client.db('brawlstars').collection('players').findOne({ tag: req.params.tag });
+        const playerTag = decodeURIComponent(req.params.playerTag);
+        const playerData = await client.db('brawlstars').collection('players').findOne({ tag: playerTag });
         res.json(playerData);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
+// Player Profile Endpoint
+app.get('/api/players/:playerTag', async (req, res) => {
+    try {
+        const playerTag = decodeURIComponent(req.params.playerTag);
+        const playerInfo = await client.db('brawlstars').collection('players')
+            .findOne({ 'playerInfo.tag': playerTag });
+
+        if (!playerInfo) {
+            return res.status(404).json({ message: 'Player not found' });
+        }
+
+        res.json({
+            name: playerInfo.playerInfo.name,
+            trophies: playerInfo.playerInfo.trophies,
+            brawlers: playerInfo.playerInfo.brawlers // Accessing the nested brawlers
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
 // Player Stats Endpoint
 app.get('/api/players/:playerTag/stats', async (req, res) => {
     try {
-        const playerStats = await client.db('brawlstars').collection('playerStats').findOne({ playerTag: req.params.playerTag });
+        const playerTag = decodeURIComponent(req.params.playerTag);
+        const playerStats = await client.db('brawlstars').collection('playerStats')
+            .findOne({ playerTag: playerTag });
+
+        if (!playerStats) {
+            return res.status(404).json({ message: 'Player stats not found' });
+        }
+
         res.json(playerStats);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -262,7 +286,8 @@ app.get('/api/players/:playerTag/stats', async (req, res) => {
 app.get('/api/players/:playerTag/brawlers', async (req, res) => {
     try {
         // Example logic, adjust according to your actual data structure
-        const brawlers = await client.db('brawlstars').collection('brawlerStats').find({ playerTag: req.params.playerTag }).toArray();
+        const playerTag = decodeURIComponent(req.params.playerTag);
+        const brawlers = await client.db('brawlstars').collection('brawlerStats').find({ playerTag: playerTag }).toArray();
         res.json(brawlers);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -272,7 +297,17 @@ app.get('/api/players/:playerTag/brawlers', async (req, res) => {
 // Recent Battles Endpoint
 app.get('/api/players/:playerTag/recent-battles', async (req, res) => {
     try {
-        const recentBattles = await client.db('brawlstars').collection('battleHistory').find({ playerTag: req.params.playerTag }).limit(10).toArray();
+        const playerTag = decodeURIComponent(req.params.playerTag);
+        const recentBattles = await client.db('brawlstars').collection('battles')
+            .find({ playerTag: playerTag })
+            .sort({ time: -1 })
+            .limit(10) // adjust the limit as needed
+            .toArray();
+
+        if (!recentBattles) {
+            return res.status(404).json({ message: 'Recent battles not found' });
+        }
+
         res.json(recentBattles);
     } catch (error) {
         res.status(500).json({ message: error.message });
